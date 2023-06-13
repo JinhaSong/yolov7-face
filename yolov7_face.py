@@ -13,11 +13,11 @@ from utils.general import check_img_size, non_max_suppression, xyxy2xywh, scale_
 class YOLOv7Face(Detection):
     def __init__(self, params):
         super().__init__(params)
-        self.model = attempt_load(params["model_path"], map_location=params["device"])
-        self.device = params["device"]
+        self.device = f"cuda:{params['device']}" if torch.cuda.is_available() else "cpu"
         self.image_size = params["image_size"]
         self.conf_thresh = params["conf_thresh"]
         self.iou_thresh = params["iou_thresh"]
+        self.model = attempt_load(params["model_path"], map_location=self.device)
 
     @staticmethod
     def scale_coords_landmarks(img1_shape, coords, img0_shape, ratio_pad=None):
