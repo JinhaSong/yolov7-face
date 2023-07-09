@@ -7,17 +7,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from models.experimental import attempt_load
 from utils.datasets import letterbox
+from utils.torch_utils import select_device
 from utils.general import check_img_size, non_max_suppression, xyxy2xywh, scale_coords
 
 
 class YOLOv7Face(Detection):
     def __init__(self, params):
         super().__init__(params)
-        self.device = f"cuda:{params['device']}" if torch.cuda.is_available() else "cpu"
         self.image_size = params["image_size"]
         self.conf_thresh = params["conf_thresh"]
         self.iou_thresh = params["iou_thresh"]
+        self.batch_size = int(params["batch_size"])
+        self.device = select_device(str(params["device"]), batch_size=self.batch_size)
         self.model = attempt_load(params["model_path"], map_location=self.device)
+        self.model.eval()
+        self.model(torch.zeros(1, 3, self.image_size, self.image_size).to(self.device).type_as(next(self.model.parameters())))  # run once
 
     @staticmethod
     def scale_coords_landmarks(img1_shape, coords, img0_shape, ratio_pad=None):
@@ -104,8 +108,8 @@ class YOLOv7Face(Detection):
         targets =  torch.zeros((0, 6))
         image = torch.stack(tensor_images, 0)
         image = image.to(self.device, non_blocking=True)
-        image = image.float()  # uint8 to fp16/32
-        image /= 255.0  # 0 - 255 to 0.0 - 1.0
+        image = image.float()
+        image /= 255.0
         targets = targets.to(self.device)
         nb, _, height, width = image.shape  # batch size, channels, height, width
 
@@ -120,7 +124,7 @@ class YOLOv7Face(Detection):
             if len(det):
                 detn = det.clone()
                 detn[:, :4] = scale_coords(image[si].shape[1:], detn[:, :4], tuple(shapes[si][0])).round()
-                for *xyxy, conf, cls in reversed(detn.tolist()):
+                for *xyxy, cls, conf in reversed(detn.tolist()):
                     if conf > self.conf_thresh:
                         conf = float(conf)
                         x = float(xyxy[0])
